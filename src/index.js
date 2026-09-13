@@ -1,12 +1,7 @@
-const express = require("express");
 const rubika = require("./rubika");
 const { saveCode, getCode } = require("./db");
 
 const ADMIN_ID = "u0Ic6ps06102e1a1969cc92b096f597e";
-const PUBLIC_URL = ""; // بعد از گرفتن دامنه از Railway، اینجا پر کن
-
-const app = express();
-app.use(express.json());
 
 const waitingForContent = new Set();
 
@@ -18,6 +13,13 @@ const ADMIN_START_TEXT =
   "نه ممد خان، من همین کار رو گردن میگیرم 🙌\n\n" +
   "حالا گزینه زیر رو بزن ممد جان تا کد پیام رو بهت بدم 👇";
 
+const USER_START_TEXT =
+  "به ربات بزرگترین مجموعه آموزش ارگ اندروید دانلود خوش آمدید 🎹\n\n" +
+  "به گلدن ارگ خوش آمدید 🌟\n\n" +
+  "خوشحالیم که ما رو برای یادگیری انتخاب کردین 🙏\n\n" +
+  "ما در تلاشیم که با کمترین هزینه بهترین آموزش رو بهتون بدیم 💛\n\n" +
+  "لطفا کدی از کانال @org_androidVIP گرفتین رو ارسال کنید تا پیام مربوط به کد را برای شما ارسال کنم 🔑";
+
 const ADMIN_KEYPAD = {
   rows: [
     {
@@ -28,13 +30,8 @@ const ADMIN_KEYPAD = {
   ],
 };
 
-app.post("/receiveUpdate", async (req, res) => {
-  res.sendStatus(200);
-
+async function handleUpdate(update) {
   try {
-    const update = req.body.update;
-    if (!update) return;
-
     const chatId = update.chat_id;
     const msg = update.new_message;
 
@@ -42,10 +39,7 @@ app.post("/receiveUpdate", async (req, res) => {
       if (chatId === ADMIN_ID) {
         await rubika.sendMessage(chatId, ADMIN_START_TEXT, ADMIN_KEYPAD);
       } else {
-        await rubika.sendMessage(
-          chatId,
-          "سلام! 👋\nکد پیامی که داری رو برام بفرست تا محتوا رو نشونت بدم."
-        );
+        await rubika.sendMessage(chatId, USER_START_TEXT);
       }
       return;
     }
@@ -88,7 +82,7 @@ app.post("/receiveUpdate", async (req, res) => {
       waitingForContent.delete(chatId);
       await rubika.sendMessage(
         chatId,
-        `دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n${code}\n\n` +
+        دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n${code}\n\n +
           "حالا هر کاربری این کد رو بزنه، همون پیام رو نشونش میدم."
       );
       return;
@@ -109,25 +103,32 @@ app.post("/receiveUpdate", async (req, res) => {
   } catch (err) {
     console.error("خطا در پردازش آپدیت:", err.message);
   }
-});
+}
 
-app.get("/", (req, res) => res.send("Rubika bot is running ✅"));
+let offsetId = undefined;
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
+async function poll() {
+  try {
+    const res = await rubika.callMethod("getUpdates", {
+      limit: 10,
+      offset_id: offsetId,
+    });
+    const data = res && res.data ? res.data : {};
+    const updates = data.updates  data.chat_updates  [];
 
-  if (PUBLIC_URL) {
-    try {
-      const res = await rubika.updateBotEndpoint(
-        `${PUBLIC_URL.replace(/\/$/, "")}/receiveUpdate`,
-        "ReceiveUpdate"
-      );
-      console.log("وبهوک با موفقیت ثبت شد:", res);
-    } catch (err) {
-      console.error("ثبت خودکار وبهوک شکست خورد:", err.message);
+    for (const update of updates) {
+      await handleUpdate(update);
     }
-  } else {
-    console.log("PUBLIC_URL هنوز خالیه — بعد از گرفتن دامنه از Railway پرش کن.");
+
+    if (data.next_offset_id) {
+      offsetId = data.next_offset_id;
+    }
+  } catch (err) {
+    console.error("خطا در polling:", err.message);
+  } finally {
+    setTimeout(poll, 2000);
   }
-});
+}
+
+console.log("ربات با polling شروع به کار کرد...");
+poll();
