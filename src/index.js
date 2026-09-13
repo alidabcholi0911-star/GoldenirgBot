@@ -35,7 +35,17 @@ async function handleUpdate(update) {
     const chatId = update.chat_id;
     const msg = update.new_message;
 
-    if (update.type === "StartedBot" || (msg && msg.text === "/start")) {
+    let isStart = false;
+    if (update.type === "StartedBot") {
+      isStart = true;
+    }
+    if (msg) {
+      if (msg.text === "/start") {
+        isStart = true;
+      }
+    }
+
+    if (isStart) {
       if (chatId === ADMIN_ID) {
         await rubika.sendMessage(chatId, ADMIN_START_TEXT, ADMIN_KEYPAD);
       } else {
@@ -44,11 +54,19 @@ async function handleUpdate(update) {
       return;
     }
 
-    if (!msg) return;
+    if (!msg) {
+      return;
+    }
 
-    const buttonId = msg.aux_data && msg.aux_data.button_id;
+    let buttonId = null;
+    if (msg.aux_data) {
+      buttonId = msg.aux_data.button_id;
+    }
+
     if (buttonId === "make_code") {
-      if (chatId !== ADMIN_ID) return;
+      if (chatId !== ADMIN_ID) {
+        return;
+      }
       waitingForContent.add(chatId);
       await rubika.sendMessage(
         chatId,
@@ -60,33 +78,46 @@ async function handleUpdate(update) {
       return;
     }
 
-    if (chatId === ADMIN_ID && waitingForContent.has(chatId)) {
-      let code;
+    if (chatId === ADMIN_ID) {
+      if (waitingForContent.has(chatId)) {
+        let code;
+        let hasFile = false;
 
-      if (msg.file && msg.file.file_id) {
-        code = saveCode({
-          type: "file",
-          fileId: msg.file.file_id,
-          caption: msg.text || "",
-        });
-      } else if (msg.text) {
-        code = saveCode({ type: "text", content: msg.text });
-      } else {
+        if (msg.file) {
+          if (msg.file.file_id) {
+            hasFile = true;
+          }
+        }
+
+        if (hasFile) {
+          let caption = "";
+          if (msg.text) {
+            caption = msg.text;
+          }
+          code = saveCode({
+            type: "file",
+            fileId: msg.file.file_id,
+            caption: caption,
+          });
+        } else if (msg.text) {
+          code = saveCode({ type: "text", content: msg.text });
+        } else {
+          await rubika.sendMessage(
+            chatId,
+            "این نوع پیام رو نمی‌شناسم 🙏 یه متن یا فایل بفرست."
+          );
+          return;
+        }
+
+        waitingForContent.delete(chatId);
         await rubika.sendMessage(
           chatId,
-          "این نوع پیام رو نمی‌شناسم 🙏 یه متن یا فایل بفرست."
+          "دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n" +
+            code +
+            "\n\nحالا هر کاربری این کد رو بزنه، همون پیام رو نشونش میدم."
         );
         return;
       }
-
-      waitingForContent.delete(chatId);
-      await rubika.sendMessage(
-        chatId,
-        "دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n" +
-          code +
-          "\n\nحالا هر کاربری این کد رو بزنه، همون پیام رو نشونش میدم."
-      );
-      return;
     }
 
     if (msg.text) {
@@ -95,7 +126,11 @@ async function handleUpdate(update) {
         if (record.type === "text") {
           await rubika.sendMessage(chatId, record.content);
         } else {
-          await rubika.sendFile(chatId, record.file_id, record.caption || "");
+          let caption = "";
+          if (record.caption) {
+            caption = record.caption;
+          }
+          await rubika.sendFile(chatId, record.file_id, caption);
         }
       } else {
         await rubika.sendMessage(chatId, "کد اشتباهه ❌ دوباره چک کن.");
@@ -114,8 +149,21 @@ async function poll() {
       limit: 10,
       offset_id: offsetId,
     });
-    const data = res && res.data ? res.data : {};
-    const updates = data.updates  data.chat_updates  [];
+
+    let data = {};
+    if (res) {
+      if (res.data) {
+        data = res.data;
+      }
+    }
+
+  let updates = data.updates;
+    if (!updates) {
+      updates = data.chat_updates;
+    }
+    if (!updates) {
+      updates = [];
+    }
 
     for (const update of updates) {
       await handleUpdate(update);
