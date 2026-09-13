@@ -82,8 +82,9 @@ async function handleUpdate(update) {
       waitingForContent.delete(chatId);
       await rubika.sendMessage(
         chatId,
-        دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n${code}\n\n +
-          "حالا هر کاربری این کد رو بزنه، همون پیام رو نشونش میدم."
+        "دیدی ناموسا چقددددددر راحت 😎\n\nکد پیامت میشه:\n\n" +
+          code +
+          "\n\nحالا هر کاربری این کد رو بزنه، همون پیام رو نشونش میدم."
       );
       return;
     }
